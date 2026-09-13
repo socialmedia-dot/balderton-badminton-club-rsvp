@@ -259,7 +259,22 @@ function readSheet(name) {
   const headers = data[0];
   return data.slice(1).map(row => {
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
+    headers.forEach((h, i) => {
+      let val = row[i];
+      // Normalize Date objects to YYYY-MM-DD strings (for 'date' columns)
+      if (val instanceof Date && h === 'date') {
+        val = Utilities.formatDate(val, 'Europe/London', 'yyyy-MM-dd');
+      }
+      // Normalize Date objects to HH:mm strings (for 'time' columns)
+      else if (val instanceof Date && h === 'time') {
+        val = Utilities.formatDate(val, 'Europe/London', 'HH:mm');
+      }
+      // Normalize Date objects to ISO strings (for any other Date columns)
+      else if (val instanceof Date) {
+        val = val.toISOString();
+      }
+      obj[h] = val;
+    });
     return obj;
   });
 }
