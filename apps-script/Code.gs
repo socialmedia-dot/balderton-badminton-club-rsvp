@@ -32,6 +32,35 @@ const SHEET_NAMES = {
  */
 function doGet(e) {
   try {
+    const action = e && e.parameter && e.parameter.action;
+
+    // Mutation via GET (Apps Script POST is finicky — use GET with action param)
+    if (action) {
+      const body = Object.assign({}, e.parameter);  // flatten all params to body
+
+      // RSVP is public (no admin auth required — members submit their own RSVPs)
+      if (action === 'rsvp') {
+        return jsonResponse(handleRsvp(body));
+      }
+
+      // Other mutations require admin password
+      try { requireAdmin(body); } catch (err) {
+        return jsonResponse({ success: false, error: err.message });
+      }
+      switch (action) {
+        case 'add_member':
+          return jsonResponse(handleAddMember(body));
+        case 'add_session':
+          return jsonResponse(handleAddSession(body));
+        case 'delete_member':
+          return jsonResponse(handleDeleteMember(body));
+        case 'delete_session':
+          return jsonResponse(handleDeleteSession(body));
+        default:
+          return jsonResponse({ success: false, error: 'Unknown action: ' + action });
+      }
+    }
+
     const isAdmin = e && e.parameter && e.parameter.pw === ADMIN_PASSWORD;
     if (e && e.parameter.pw && !isAdmin) {
       return jsonResponse({ error: 'invalid_password' });
@@ -180,6 +209,36 @@ function handleAddMember(body) {
 
   logActivity('admin', 'KC', newId, 'added_member');
   return { success: true, id: newId };
+}
+
+function handleDeleteMember(body) {
+  const { id } = body;
+  if (!id) return { success: false, error: 'Missing id' };
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.MEMBERS);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === id) {
+      sheet.deleteRow(i + 1);
+      logActivity('admin', 'KC', id, 'deleted_member');
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Member not found' };
+}
+
+function handleDeleteSession(body) {
+  const { id } = body;
+  if (!id) return { success: false, error: 'Missing id' };
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SESSIONS);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === id) {
+      sheet.deleteRow(i + 1);
+      logActivity('admin', 'KC', id, 'deleted_session');
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Session not found' };
 }
 
 // ============================================================

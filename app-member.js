@@ -103,16 +103,12 @@ createApp({
       toast.value = { sessionId, message: '', success: true };
       try {
         const member = members.value.find(m => m.id === currentMemberId.value);
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'rsvp',
-            member_id: currentMemberId.value,
-            member_name: member ? member.name : '',
-            session_id: sessionId,
-            status: status,
-          }),
-        });
+        const url = `${API_URL}?action=rsvp` +
+          `&member_id=${encodeURIComponent(currentMemberId.value)}` +
+          `&member_name=${encodeURIComponent(member ? member.name : '')}` +
+          `&session_id=${encodeURIComponent(sessionId)}` +
+          `&status=${encodeURIComponent(status)}`;
+        const res = await fetch(url);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Unknown error');
         toast.value = { sessionId, message: `✓ Saved: ${status.toUpperCase()}`, success: true };

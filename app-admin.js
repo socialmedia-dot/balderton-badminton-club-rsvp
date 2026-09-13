@@ -214,14 +214,14 @@ createApp({
       modalError.value = '';
       modalSubmitting.value = true;
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            action: 'add_session',
-            admin_pw: adminPw.value,
-            ...newSession.value,
-          }),
-        });
+        const url = `${API_URL}?action=add_session&admin_pw=${encodeURIComponent(adminPw.value)}` +
+          `&title=${encodeURIComponent(newSession.title)}` +
+          `&date=${encodeURIComponent(newSession.date)}` +
+          `&time=${encodeURIComponent(newSession.time)}` +
+          `&court=${encodeURIComponent(newSession.court || '')}` +
+          `&location=${encodeURIComponent(newSession.location || '')}` +
+          `&max_spots=${encodeURIComponent(newSession.max_spots || 12)}`;
+        const res = await fetch(url);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Failed');
         showAddSession.value = false;
@@ -238,15 +238,9 @@ createApp({
       modalError.value = '';
       modalSubmitting.value = true;
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'add_member',
-            admin_pw: adminPw.value,
-            name: newMember.value.name,
-          }),
-        });
+        const url = `${API_URL}?action=add_member&admin_pw=${encodeURIComponent(adminPw.value)}` +
+          `&name=${encodeURIComponent(newMember.name)}`;
+        const res = await fetch(url);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Failed');
         showAddMember.value = false;
