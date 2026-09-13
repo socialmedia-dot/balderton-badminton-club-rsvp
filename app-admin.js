@@ -128,7 +128,8 @@ createApp({
       return m ? m.name : id;
     }
     function initials(name) {
-      return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+      const s = String(name || '');
+      return s.split(' ').map(p => p[0] || '').slice(0, 2).join('').toUpperCase();
     }
     function getHeatmapClass(memberId, sessionId) {
       const a = attendance.value.find(x => x.member_id === memberId && x.session_id === sessionId);

@@ -199,7 +199,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
           <template v-for="m in members" :key="m.id">
             <div class="py-2 px-2 text-gray-700 font-medium flex items-center gap-2 text-xs">
               <div class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">{{ initials(m.name) }}</div>
-              <span class="truncate">{{ m.name.split(' ')[0] }}.</span>
+              <span class="truncate">{{ String(m.name || '').split(' ')[0] }}.</span>
             </div>
             <div v-for="s in last12Sessions" :key="m.id + '-' + s.id"
                  :class="getHeatmapClass(m.id, s.id)"
