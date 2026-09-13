@@ -7,7 +7,7 @@ const { createApp, ref, computed, onMounted } = Vue;
 // ============================================================
 // CONFIG
 // ============================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbwP3uqxzkQmv-3V2lXV-IY2PKvUkwUB-6dIcVxU1L8PnAkVEwBPRSPDB3k6hWAuZGUx/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzp-F8_PWp0dC6DjNwRm4oNh2EvrUNCe-DKHjsVatn72EXdl2iSZ--UVo6sKtX58dyv/exec';
 // Admin password is stored in Apps Script (Code.gs) as ADMIN_PASSWORD constant
 // Here we just collect it and send it with admin requests for verification
 
@@ -240,6 +240,7 @@ createApp({
       try {
         const res = await fetch(API_URL, {
           method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             action: 'add_member',
             admin_pw: adminPw.value,
