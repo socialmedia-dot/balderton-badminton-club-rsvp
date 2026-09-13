@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Balderton BC — Preview (Admin)</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}.heatmap-cell{transition:transform .1s}.heatmap-cell:hover{transform:scale(1.2);z-index:10}</style>
+<script>tailwind.config={theme:{extend:{colors:{primary:'#1e3a8a','primary-light':'#eff6ff'}}}}</script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="app" v-cloak class="max-w-7xl mx-auto p-4 md:p-6">
+
+<header class="mb-5 flex items-center justify-between flex-wrap gap-3">
+  <div class="flex items-center gap-3">
+    <div class="w-11 h-11 bg-primary rounded-lg flex items-center justify-center text-white text-2xl">🏸</div>
+    <div>
+      <h1 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+        Balderton Badminton Club
+        <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide">PREVIEW</span>
+      </h1>
+      <div class="text-xs text-gray-500">Booking manager · Last sync just now · Newark Leisure Centre</div>
+    </div>
+  </div>
+</header>
+
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+  <div class="bg-white rounded-lg shadow-sm p-4">
+    <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Active Members</div>
+    <div class="text-2xl font-bold text-gray-900 mt-1">{{ members.length }}</div>
+    <div class="text-xs text-emerald-600 mt-1">+2 this month</div>
+  </div>
+  <div class="bg-white rounded-lg shadow-sm p-4">
+    <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Sessions This Week</div>
+    <div class="text-2xl font-bold text-gray-900 mt-1">{{ sessionsThisWeek.length }}</div>
+    <div class="text-xs text-gray-500 mt-1">{{ sessionsThisWeek.length > 0 ? sessionsThisWeek.map(s => formatDay(s.date)).join(' / ') : '—' }}</div>
+  </div>
+  <div class="bg-white rounded-lg shadow-sm p-4">
+    <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Avg Attendance</div>
+    <div class="text-2xl font-bold text-gray-900 mt-1">{{ avgAttendance }}%</div>
+    <div class="text-xs text-emerald-600 mt-1">▲ 5% vs Aug</div>
+  </div>
+  <div class="bg-white rounded-lg shadow-sm p-4">
+    <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Recommended Spend</div>
+    <div class="text-2xl font-bold text-gray-900 mt-1">£{{ optionB.cost }}</div>
+    <div class="text-xs text-gray-500 mt-1">{{ optionB.courts }} courts / week</div>
+  </div>
+</div>
+
+<div class="bg-white rounded-lg shadow-sm p-5 mb-5">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-sm font-semibold text-gray-900">📅 Court Booking Calculator · This Week</h2>
+    <div class="text-xs text-primary font-semibold">View next week →</div>
+  </div>
+
+  <div v-for="session in sessionsThisWeek" :key="session.id" class="grid grid-cols-12 gap-3 items-center py-3 border-b border-gray-100 last:border-0">
+    <div class="col-span-2 md:col-span-1 bg-primary-light rounded-lg p-2 text-center">
+      <div class="text-xs text-primary font-bold uppercase">{{ formatDay(session.date) }}</div>
+      <div class="text-xl font-bold text-primary leading-none">{{ formatNum(session.date) }}</div>
+      <div class="text-xs text-primary font-bold uppercase">{{ formatMonth(session.date) }}</div>
+    </div>
+    <div class="col-span-10 md:col-span-4">
+      <div class="text-sm font-semibold text-gray-900">{{ session.title }}</div>
+      <div class="text-xs text-gray-600 mt-0.5">🕗 {{ session.time }} · {{ session.location }}</div>
+    </div>
+    <div class="col-span-6 md:col-span-2 text-center">
+      <div class="text-lg font-bold text-gray-900">{{ getYesCount(session.id) }} / {{ session.max_spots }}</div>
+      <div class="text-xs text-gray-500 uppercase font-semibold">attending</div>
+    </div>
+    <div class="col-span-6 md:col-span-2">
+      <span :class="getBadgeClass(getYesCount(session.id))" class="inline-block px-2 py-1 rounded-full text-xs font-bold">
+        {{ getRecommendedCourts(getYesCount(session.id)) }} {{ getRecommendedCourts(getYesCount(session.id)) === 1 ? 'court' : 'courts' }}
+      </span>
+      <div class="text-xs text-gray-500 mt-1">{{ getYesCount(session.id) }} ÷ 4 = {{ (getYesCount(session.id) / 4).toFixed(2) }}</div>
+    </div>
+    <div class="col-span-8 md:col-span-2 text-right">
+      <div class="text-lg font-bold text-gray-900">£{{ getRecommendedCourts(getYesCount(session.id)) * 24 }}</div>
+      <div class="text-xs text-gray-500">at £24/court</div>
+    </div>
+    <div class="col-span-4 md:col-span-1">
+      <button class="w-full bg-primary text-white py-2 rounded-md text-xs font-semibold">Book →</button>
+    </div>
+  </div>
+
+  <div v-if="sessionsThisWeek.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5 pt-5 border-t-2 border-gray-200">
+    <div class="bg-gray-50 rounded-lg p-4 text-center border-2 border-transparent">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Option A · Lean</div>
+      <div class="text-2xl font-bold text-gray-900 mt-2">{{ optionA.courts }} courts</div>
+      <div class="text-sm text-gray-600 mt-1">£{{ optionA.cost }} / week</div>
+      <div class="text-xs text-gray-500 mt-2">Calculated per RSVP<br>Capacity {{ optionA.courts * 4 }} players</div>
+    </div>
+    <div class="bg-primary-light rounded-lg p-4 text-center border-2 border-primary relative">
+      <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-primary text-white px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide whitespace-nowrap">Recommended</div>
+      <div class="text-xs text-primary uppercase font-semibold tracking-wide">Option B · Consistent</div>
+      <div class="text-2xl font-bold text-primary mt-2">{{ optionB.courts }} courts</div>
+      <div class="text-sm text-primary mt-1 font-semibold">£{{ optionB.cost }} / week</div>
+      <div class="text-xs text-gray-600 mt-2">3 per session<br>Capacity {{ optionB.courts * 4 }} players (buffer)</div>
+    </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border-2 border-transparent">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Option C · Safe</div>
+      <div class="text-2xl font-bold text-gray-900 mt-2">{{ optionC.courts }} courts</div>
+      <div class="text-sm text-gray-600 mt-1">£{{ optionC.cost }} / week</div>
+      <div class="text-xs text-gray-500 mt-2">4 per session<br>Capacity {{ optionC.courts * 4 }} players (overkill)</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+  <div class="lg:col-span-2 bg-white rounded-lg shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-900">Attendance Heatmap · Last 12 Sessions</h2>
+      <div class="text-xs text-primary font-semibold">View full grid →</div>
+    </div>
+    <div class="overflow-x-auto">
+      <div class="inline-grid gap-1 text-xs" :style="`grid-template-columns: 130px repeat(${last12Sessions.length}, minmax(40px, 1fr));`">
+        <div></div>
+        <div v-for="s in last12Sessions" :key="'h-' + s.id" class="text-center text-gray-500 font-bold py-2 text-xs">{{ formatNum(s.date) }}/{{ formatMonthNum(s.date) }}</div>
+        <template v-for="m in members" :key="m.id">
+          <div class="py-2 px-2 text-gray-700 font-medium flex items-center gap-2 text-xs">
+            <div class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">{{ initials(m.name) }}</div>
+            <span class="truncate">{{ m.name.split(' ')[0] }}.</span>
+          </div>
+          <div v-for="s in last12Sessions" :key="m.id + '-' + s.id" :class="getHeatmapClass(m.id, s.id)" class="heatmap-cell aspect-square rounded min-h-[24px]"></div>
+        </template>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
+      <span>Less</span>
+      <div class="flex gap-0.5">
+        <div class="w-4 h-3 bg-red-100 rounded-sm"></div>
+        <div class="w-4 h-3 bg-emerald-100 rounded-sm"></div>
+        <div class="w-4 h-3 bg-emerald-300 rounded-sm"></div>
+        <div class="w-4 h-3 bg-emerald-500 rounded-sm"></div>
+        <div class="w-4 h-3 bg-emerald-800 rounded-sm"></div>
+      </div>
+      <span>More</span>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow-sm p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-900">Recent Activity</h2>
+      <div class="text-xs text-primary font-semibold">View all →</div>
+    </div>
+    <div v-for="a in activity.slice(0, 15)" :key="a.timestamp + a.member_id" class="py-2.5 border-b border-gray-100 last:border-0 flex gap-2.5 text-xs">
+      <div :class="a.status === 'yes' ? 'bg-emerald-500' : a.status === 'no' ? 'bg-red-500' : 'bg-amber-500'" class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"></div>
+      <div class="flex-1 min-w-0">
+        <div class="text-gray-700"><strong class="text-gray-900">{{ a.member_name }}</strong> {{ a.status === 'yes' ? 'in for' : a.status === 'no' ? 'out for' : 'maybe for' }} <span class="text-gray-600">{{ formatFullDate(a.session_id) }}</span></div>
+        <div class="text-gray-400 mt-0.5">{{ formatTime(a.timestamp) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="text-center text-xs text-gray-400 mt-8 mb-4">PREVIEW MODE · Mock data · {{ members.length }} members loaded</footer>
+</div>
+
+<script src="mock-data.js"></script>
+<script>
+const { createApp, ref, computed } = Vue;
+createApp({
+  setup() {
+    const members = ref(window.MOCK_DATA.members);
+    const sessions = ref(window.MOCK_DATA.sessions);
+    const attendance = ref(window.MOCK_DATA.attendance);
+    const activity = ref(window.MOCK_DATA.activity);
+
+    const sessionsThisWeek = computed(() => {
+      const ws = '2026-09-14', we = '2026-09-20';
+      return sessions.value.filter(s => s.date >= ws && s.date <= we).sort((a, b) => a.date.localeCompare(b.date));
+    });
+    const last12Sessions = computed(() => {
+      const today = '2026-09-14';
+      return sessions.value.filter(s => s.date <= today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).reverse();
+    });
+    const optionA = computed(() => {
+      const courts = sessionsThisWeek.value.reduce((sum, s) => sum + getRecommendedCourts(getYesCount(s.id)), 0);
+      return { courts, cost: courts * 24 };
+    });
+    const optionB = computed(() => {
+      const courts = sessionsThisWeek.value.length * 3;
+      return { courts, cost: courts * 24 };
+    });
+    const optionC = computed(() => {
+      const courts = sessionsThisWeek.value.length * 4;
+      return { courts, cost: courts * 24 };
+    });
+    const avgAttendance = computed(() => {
+      const recent = last12Sessions.value.slice(-4);
+      if (recent.length === 0) return 0;
+      const total = recent.reduce((sum, s) => sum + (getYesCount(s.id) / s.max_spots), 0);
+      return Math.round((total / recent.length) * 100);
+    });
+
+    function getRecommendedCourts(n) { return Math.ceil(n / 4); }
+    function getBadgeClass(n) {
+      const c = getRecommendedCourts(n);
+      if (c <= 2) return 'bg-emerald-100 text-emerald-800';
+      if (c === 3) return 'bg-amber-100 text-amber-800';
+      return 'bg-red-100 text-red-800';
+    }
+    function getYesCount(id) { return attendance.value.filter(a => a.session_id === id && a.status === 'yes').length; }
+    function initials(name) { return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase(); }
+    function getHeatmapClass(memberId, sessionId) {
+      const a = attendance.value.find(x => x.member_id === memberId && x.session_id === sessionId);
+      if (!a) return 'bg-gray-100';
+      const pct = getYesCount(sessionId) / sessions.value.find(s => s.id === sessionId)?.max_spots;
+      if (a.status === 'no') return 'bg-red-100';
+      if (a.status === 'maybe') return 'bg-amber-100';
+      if (pct >= 0.85) return 'bg-emerald-800';
+      if (pct >= 0.7) return 'bg-emerald-500';
+      if (pct >= 0.5) return 'bg-emerald-300';
+      return 'bg-emerald-100';
+    }
+    function formatDay(d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short' }); }
+    function formatNum(d) { return new Date(d + 'T00:00:00').getDate(); }
+    function formatMonth(d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short' }); }
+    function formatMonthNum(d) { return (new Date(d + 'T00:00:00').getMonth() + 1).toString().padStart(2, '0'); }
+    function formatFullDate(idOrDate) {
+      let dateStr = idOrDate;
+      if (idOrDate.startsWith('s')) {
+        const s = sessions.value.find(x => x.id === idOrDate);
+        if (s) dateStr = s.date;
+        else return idOrDate;
+      }
+      return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+    function formatTime(ts) {
+      const diffMin = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+      if (diffMin < 1) return 'just now';
+      if (diffMin < 60) return diffMin + ' min ago';
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return diffHr + ' hr ago';
+      return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    return { members, sessions, attendance, activity, sessionsThisWeek, last12Sessions, optionA, optionB, optionC, avgAttendance,
+      getRecommendedCourts, getBadgeClass, getYesCount, initials, getHeatmapClass,
+      formatDay, formatNum, formatMonth, formatMonthNum, formatFullDate, formatTime };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balderton BC — Admin</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1e3a8a',
+        'primary-light': '#eff6ff',
+      }
+    }
+  }
+}
+</style>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.heatmap-cell { transition: transform 0.1s; }
+.heatmap-cell:hover { transform: scale(1.2); z-index: 10; }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="app" v-cloak>
+
+<!-- Login -->
+<div v-if="!authed" class="flex items-center justify-center min-h-screen p-4">
+  <div class="bg-white rounded-lg shadow-md p-8 max-w-md w-full">
+    <div class="text-center mb-6">
+      <div class="w-16 h-16 bg-primary rounded-lg flex items-center justify-center text-white text-3xl mx-auto mb-3">🏸</div>
+      <h1 class="text-xl font-semibold text-gray-900">Admin Login</h1>
+      <div class="text-sm text-gray-500 mt-1">Balderton Badminton Club</div>
+    </div>
+    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+    <input v-model="passwordInput" @keyup.enter="login" type="password"
+           class="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+           placeholder="Enter admin password">
+    <button @click="login" :disabled="!passwordInput"
+            class="w-full bg-primary text-white py-2 rounded-md font-semibold hover:bg-primary-dark disabled:opacity-50">
+      Sign in
+    </button>
+    <div v-if="loginError" class="mt-3 text-sm text-red-600 text-center">{{ loginError }}</div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div v-else-if="loading" class="flex items-center justify-center min-h-screen">
+  <div class="text-center">
+    <div class="text-4xl mb-3">🏸</div>
+    <div class="text-gray-600">Loading admin dashboard...</div>
+  </div>
+</div>
+
+<!-- Error -->
+<div v-else-if="error" class="flex items-center justify-center min-h-screen p-4">
+  <div class="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+    <div class="text-red-800 font-semibold mb-2">⚠️ Setup incomplete</div>
+    <div class="text-red-700 text-sm">{{ error }}</div>
+  </div>
+</div>
+
+<!-- Main dashboard -->
+<div v-else class="max-w-7xl mx-auto p-4 md:p-6">
+
+  <!-- Header -->
+  <header class="mb-5 flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 bg-primary rounded-lg flex items-center justify-center text-white text-2xl">🏸</div>
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+          Balderton Badminton Club
+          <span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide">Admin</span>
+        </h1>
+        <div class="text-xs text-gray-500">Booking manager · Last sync {{ lastSync }} · Newark Leisure Centre</div>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button @click="showAddSession = true" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-primary-dark">+ Session</button>
+      <button @click="showAddMember = true" class="bg-white border border-primary text-primary px-4 py-2 rounded-md text-sm font-semibold hover:bg-primary-light">+ Member</button>
+    </div>
+  </header>
+
+  <!-- KPI row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Active Members</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">{{ members.length }}</div>
+      <div class="text-xs text-emerald-600 mt-1">Updated now</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Sessions / Week</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">{{ sessionsThisWeek.length }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ sessionsThisWeek.length > 0 ? sessionsThisWeek.map(s => formatDay(s.date)).join(' / ') : '—' }}</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Avg Attendance</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">{{ avgAttendance }}%</div>
+      <div class="text-xs text-emerald-600 mt-1">Last 4 weeks</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm p-4">
+      <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Recommended Spend</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">£{{ optionB.cost }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ optionB.courts }} courts / week</div>
+    </div>
+  </div>
+
+  <!-- Court Booking Calculator -->
+  <div class="bg-white rounded-lg shadow-sm p-5 mb-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-900">📅 Court Booking Calculator · This Week ({{ thisWeekLabel }})</h2>
+      <div class="text-xs text-primary font-semibold cursor-pointer hover:underline">View next week →</div>
+    </div>
+
+    <div v-if="sessionsThisWeek.length === 0" class="text-center text-gray-500 py-8">
+      No sessions this week. <span class="text-primary cursor-pointer hover:underline" @click="showAddSession = true">Add one →</span>
+    </div>
+
+    <div v-for="session in sessionsThisWeek" :key="session.id"
+         class="grid grid-cols-12 gap-3 items-center py-3 border-b border-gray-100 last:border-0">
+      <div class="col-span-2 md:col-span-1 bg-primary-light rounded-lg p-2 text-center">
+        <div class="text-xs text-primary font-bold uppercase">{{ formatDay(session.date) }}</div>
+        <div class="text-xl font-bold text-primary leading-none">{{ formatNum(session.date) }}</div>
+        <div class="text-xs text-primary font-bold uppercase">{{ formatMonth(session.date) }}</div>
+      </div>
+      <div class="col-span-10 md:col-span-4">
+        <div class="text-sm font-semibold text-gray-900">{{ session.title || 'Session' }}</div>
+        <div class="text-xs text-gray-600 mt-0.5">🕗 {{ session.time }} · {{ session.location }}</div>
+      </div>
+      <div class="col-span-6 md:col-span-2 text-center">
+        <div class="text-lg font-bold text-gray-900">{{ getYesCount(session.id) }} / {{ session.max_spots }}</div>
+        <div class="text-xs text-gray-500 uppercase font-semibold">attending</div>
+      </div>
+      <div class="col-span-6 md:col-span-2">
+        <span :class="getBadgeClass(getYesCount(session.id))"
+              class="inline-block px-2 py-1 rounded-full text-xs font-bold">
+          {{ getRecommendedCourts(getYesCount(session.id)) }} {{ getRecommendedCourts(getYesCount(session.id)) === 1 ? 'court' : 'courts' }}
+        </span>
+        <div class="text-xs text-gray-500 mt-1">{{ getYesCount(session.id) }} ÷ 4 = {{ (getYesCount(session.id) / 4).toFixed(2) }}</div>
+      </div>
+      <div class="col-span-8 md:col-span-2 text-right">
+        <div class="text-lg font-bold text-gray-900">£{{ getRecommendedCourts(getYesCount(session.id)) * 24 }}</div>
+        <div class="text-xs text-gray-500">at £24/court</div>
+      </div>
+      <div class="col-span-4 md:col-span-1">
+        <button class="w-full bg-primary text-white py-2 rounded-md text-xs font-semibold hover:bg-primary-dark">
+          Book →
+        </button>
+      </div>
+    </div>
+
+    <!-- Weekly options -->
+    <div v-if="sessionsThisWeek.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5 pt-5 border-t-2 border-gray-200">
+      <div class="bg-gray-50 rounded-lg p-4 text-center border-2 border-transparent">
+        <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Option A · Lean</div>
+        <div class="text-2xl font-bold text-gray-900 mt-2">{{ optionA.courts }} courts</div>
+        <div class="text-sm text-gray-600 mt-1">£{{ optionA.cost }} / week</div>
+        <div class="text-xs text-gray-500 mt-2">Calculated per RSVP<br>Capacity {{ optionA.courts * 4 }} players</div>
+      </div>
+      <div class="bg-primary-light rounded-lg p-4 text-center border-2 border-primary relative">
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-primary text-white px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide whitespace-nowrap">Recommended</div>
+        <div class="text-xs text-primary uppercase font-semibold tracking-wide">Option B · Consistent</div>
+        <div class="text-2xl font-bold text-primary mt-2">{{ optionB.courts }} courts</div>
+        <div class="text-sm text-primary mt-1 font-semibold">£{{ optionB.cost }} / week</div>
+        <div class="text-xs text-gray-600 mt-2">3 per session<br>Capacity {{ optionB.courts * 4 }} players (buffer)</div>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-4 text-center border-2 border-transparent">
+        <div class="text-xs text-gray-500 uppercase font-semibold tracking-wide">Option C · Safe</div>
+        <div class="text-2xl font-bold text-gray-900 mt-2">{{ optionC.courts }} courts</div>
+        <div class="text-sm text-gray-600 mt-1">£{{ optionC.cost }} / week</div>
+        <div class="text-xs text-gray-500 mt-2">4 per session<br>Capacity {{ optionC.courts * 4 }} players (overkill)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Heatmap + Activity -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+
+    <!-- Heatmap -->
+    <div class="lg:col-span-2 bg-white rounded-lg shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-900">Attendance Heatmap · Last 12 Sessions</h2>
+        <div class="text-xs text-primary font-semibold cursor-pointer hover:underline">View full grid →</div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <div class="inline-grid gap-1 text-xs" :style="`grid-template-columns: 130px repeat(${last12Sessions.length}, minmax(40px, 1fr));`">
+          <!-- Header row -->
+          <div></div>
+          <div v-for="s in last12Sessions" :key="'h-' + s.id" class="text-center text-gray-500 font-bold py-2 text-xs">
+            {{ formatNum(s.date) }}/{{ formatMonthNum(s.date) }}
+          </div>
+
+          <!-- Member rows -->
+          <template v-for="m in members" :key="m.id">
+            <div class="py-2 px-2 text-gray-700 font-medium flex items-center gap-2 text-xs">
+              <div class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">{{ initials(m.name) }}</div>
+              <span class="truncate">{{ m.name.split(' ')[0] }}.</span>
+            </div>
+            <div v-for="s in last12Sessions" :key="m.id + '-' + s.id"
+                 :class="getHeatmapClass(m.id, s.id)"
+                 class="heatmap-cell aspect-square rounded cursor-pointer min-h-[24px]"></div>
+          </template>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
+        <span>Less</span>
+        <div class="flex gap-0.5">
+          <div class="w-4 h-3 bg-red-100 rounded-sm"></div>
+          <div class="w-4 h-3 bg-emerald-100 rounded-sm"></div>
+          <div class="w-4 h-3 bg-emerald-300 rounded-sm"></div>
+          <div class="w-4 h-3 bg-emerald-500 rounded-sm"></div>
+          <div class="w-4 h-3 bg-emerald-800 rounded-sm"></div>
+        </div>
+        <span>More</span>
+      </div>
+    </div>
+
+    <!-- Activity feed -->
+    <div class="bg-white rounded-lg shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-gray-900">Recent Activity</h2>
+        <div class="text-xs text-primary font-semibold cursor-pointer hover:underline">View all →</div>
+      </div>
+
+      <div v-if="activity.length === 0" class="text-center text-gray-500 text-sm py-4">
+        No activity yet.
+      </div>
+
+      <div v-for="a in activity.slice(0, 15)" :key="a.id || a.timestamp"
+           class="py-2.5 border-b border-gray-100 last:border-0 flex gap-2.5 text-xs">
+        <div :class="a.status === 'yes' ? 'bg-emerald-500' : a.status === 'no' ? 'bg-red-500' : 'bg-amber-500'"
+             class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"></div>
+        <div class="flex-1 min-w-0">
+          <div class="text-gray-700"><strong class="text-gray-900">{{ a.member_name || getMemberName(a.member_id) }}</strong>
+            {{ a.status === 'yes' ? 'in for' : a.status === 'no' ? 'out for' : 'maybe for' }}
+            <span class="text-gray-600">{{ formatFullDate(a.session_id) }}</span>
+          </div>
+          <div class="text-gray-400 mt-0.5">{{ formatTime(a.timestamp) }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="text-center text-xs text-gray-400 mt-8 mb-4">
+    Internal tool · Built by Hermes for Balderton BC · Admin password protected
+  </footer>
+</div>
+
+<!-- Add Session modal -->
+<div v-if="showAddSession" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-lg p-6 max-w-md w-full">
+    <h2 class="text-lg font-semibold mb-4">Add Session</h2>
+    <div class="space-y-3">
+      <div><label class="block text-xs font-medium text-gray-700 mb-1">Title</label>
+        <input v-model="newSession.title" class="w-full border rounded-md px-3 py-2 text-sm" placeholder="Friday Night Social"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-medium text-gray-700 mb-1">Date</label>
+          <input v-model="newSession.date" type="date" class="w-full border rounded-md px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-700 mb-1">Time</label>
+          <input v-model="newSession.time" type="time" class="w-full border rounded-md px-3 py-2 text-sm"></div>
+      </div>
+      <div><label class="block text-xs font-medium text-gray-700 mb-1">Court</label>
+        <input v-model="newSession.court" class="w-full border rounded-md px-3 py-2 text-sm" placeholder="Court 1"></div>
+      <div><label class="block text-xs font-medium text-gray-700 mb-1">Location</label>
+        <input v-model="newSession.location" class="w-full border rounded-md px-3 py-2 text-sm" placeholder="Newark Leisure Centre"></div>
+      <div><label class="block text-xs font-medium text-gray-700 mb-1">Max spots</label>
+        <input v-model.number="newSession.max_spots" type="number" class="w-full border rounded-md px-3 py-2 text-sm" placeholder="12"></div>
+    </div>
+    <div v-if="modalError" class="mt-3 text-sm text-red-600">{{ modalError }}</div>
+    <div class="flex gap-2 mt-5">
+      <button @click="showAddSession = false" class="flex-1 border border-gray-300 py-2 rounded-md text-sm font-semibold hover:bg-gray-50">Cancel</button>
+      <button @click="addSession" :disabled="modalSubmitting" class="flex-1 bg-primary text-white py-2 rounded-md text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
+        {{ modalSubmitting ? 'Adding...' : 'Add Session' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Member modal -->
+<div v-if="showAddMember" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-lg p-6 max-w-md w-full">
+    <h2 class="text-lg font-semibold mb-4">Add Member</h2>
+    <div class="space-y-3">
+      <div><label class="block text-xs font-medium text-gray-700 mb-1">Name</label>
+        <input v-model="newMember.name" class="w-full border rounded-md px-3 py-2 text-sm" placeholder="Sarah Thompson"></div>
+    </div>
+    <div v-if="modalError" class="mt-3 text-sm text-red-600">{{ modalError }}</div>
+    <div class="flex gap-2 mt-5">
+      <button @click="showAddMember = false" class="flex-1 border border-gray-300 py-2 rounded-md text-sm font-semibold hover:bg-gray-50">Cancel</button>
+      <button @click="addMember" :disabled="modalSubmitting" class="flex-1 bg-primary text-white py-2 rounded-md text-sm font-semibold hover:bg-primary-dark disabled:opacity-50">
+        {{ modalSubmitting ? 'Adding...' : 'Add Member' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script src="app-admin.js"></script>
+</body>
+</html>
