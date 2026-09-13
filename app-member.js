@@ -7,7 +7,7 @@ const { createApp, ref, computed, onMounted } = Vue;
 // ============================================================
 // CONFIG: Hermes sets this URL after KC deploys Apps Script
 // ============================================================
-const API_URL = 'PASTE_APPS_SCRIPT_WEB_APP_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwP3uqxzkQmv-3V2lXV-IY2PKvUkwUB-6dIcVxU1L8PnAkVEwBPRSPDB3k6hWAuZGUx/exec';
 
 createApp({
   setup() {
