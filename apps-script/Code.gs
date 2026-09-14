@@ -20,7 +20,92 @@ const SHEET_NAMES = {
   SESSIONS: 'Sessions',
   ATTENDANCE: 'Attendance',
   ACTIVITY: 'Activity',
+  SETTINGS: 'Settings',
 };
+
+const SETTINGS_DEFAULTS = {
+  recurring_enabled: 'on',       // 'on' = auto-create upcoming weekly session rows
+  recurring_day: '1',            // 0=Sun 1=Mon ... 6=Sat
+  recurring_start: '19:00',
+  recurring_end: '21:00',
+  recurring_max: '12',
+  recurring_location: 'Newark Leisure Centre',
+  court_price: '24',             // £ per court per session
+  skip_dates: '',                // comma-separated YYYY-MM-DD (bank holidays etc)
+};
+
+function getSettings() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAMES.SETTINGS);
+  const out = Object.assign({}, SETTINGS_DEFAULTS);
+  if (!sheet) return out;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) out[String(data[i][0])] = String(data[i][1]);
+  }
+  return out;
+}
+
+function handleSaveSettings(body) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAMES.SETTINGS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAMES.SETTINGS);
+    sheet.getRange(1, 1, 1, 2).setValues([['key', 'value']]).setFontWeight('bold');
+  }
+  const allowed = Object.keys(SETTINGS_DEFAULTS);
+  const existing = {};
+  const last = sheet.getLastRow();
+  if (last > 1) {
+    sheet.getRange(2, 1, last - 1, 2).getValues().forEach(function(r, idx) {
+      if (r[0]) existing[String(r[0])] = idx + 2; // row number
+    });
+  }
+  allowed.forEach(function(key) {
+    if (body[key] === undefined) return;
+    const val = String(body[key]);
+    if (existing[key]) {
+      sheet.getRange(existing[key], 2).setValue(val);
+    } else {
+      sheet.appendRow([key, val]);
+    }
+  });
+  ensureRecurringSessions(); // regenerate upcoming rows for new schedule
+  logActivity('admin', 'KC', 'settings', 'saved_settings');
+  return { success: true };
+}
+
+function upcomingDatesForDay(dayNum, count) {
+  const out = [];
+  const today = new Date();
+  const cur = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const delta = (Number(dayNum) - cur.getDay() + 7) % 7;
+  for (let i = 0; i < count; i++) {
+    const d = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta + i * 7);
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+  }
+  return out;
+}
+
+function ensureRecurringSessions() {
+  const s = getSettings();
+  if (s.recurring_enabled !== 'on') return;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.SESSIONS);
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  const ids = {};
+  for (let i = 1; i < data.length; i++) { if (data[i][0]) ids[String(data[i][0])] = true; }
+  const skips = (s.skip_dates || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  const dates = upcomingDatesForDay(s.recurring_day, 2);
+  const now = new Date().toISOString();
+  dates.forEach(function(dateStr) {
+    const id = 'rw-' + dateStr;
+    if (ids[id]) return;               // already exists
+    if (skips.indexOf(dateStr) !== -1) return; // KC deleted it on purpose
+    sheet.appendRow([id, dateStr, s.recurring_start, 'Court 1', s.recurring_location, Number(s.recurring_max) || 12, now]);
+  });
+}
 
 // ============================================================
 // ENTRY POINTS
@@ -56,6 +141,8 @@ function doGet(e) {
           return jsonResponse(handleDeleteMember(body));
         case 'delete_session':
           return jsonResponse(handleDeleteSession(body));
+        case 'save_settings':
+          return jsonResponse(handleSaveSettings(body));
         default:
           return jsonResponse({ success: false, error: 'Unknown action: ' + action });
       }
@@ -67,10 +154,12 @@ function doGet(e) {
     }
 
     ensureSheetsExist();
+    ensureRecurringSessions();
     const data = {
       members: readSheet(SHEET_NAMES.MEMBERS),
       sessions: readSheet(SHEET_NAMES.SESSIONS),
       attendance: readSheet(SHEET_NAMES.ATTENDANCE),
+      settings: getSettings(),
     };
     if (isAdmin) {
       data.activity = readSheet(SHEET_NAMES.ACTIVITY).reverse().slice(0, 50);
@@ -234,6 +323,16 @@ function handleDeleteSession(body) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === id) {
       sheet.deleteRow(i + 1);
+      // Auto-generated recurring sessions: remember the skip so it stays deleted
+      if (id.indexOf('rw-') === 0) {
+        const s = getSettings();
+        const dateStr = id.slice(3);
+        const skips = (s.skip_dates || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+        if (skips.indexOf(dateStr) === -1) {
+          skips.push(dateStr);
+          handleSaveSettings({ skip_dates: skips.join(',') });
+        }
+      }
       logActivity('admin', 'KC', id, 'deleted_session');
       return { success: true };
     }

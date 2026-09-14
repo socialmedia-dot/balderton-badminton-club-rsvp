@@ -7,7 +7,7 @@ const { createApp, ref, computed, onMounted } = Vue;
 // ============================================================
 // CONFIG
 // ============================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbzp-F8_PWp0dC6DjNwRm4oNh2EvrUNCe-DKHjsVatn72EXdl2iSZ--UVo6sKtX58dyv/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxb4Cus5CILkuXZeyobr4D3jYgPxfME1n7CiHrEm2lNL2jTwzZon9hwDEkGCFvejAw/exec';
 // Admin password is stored in Apps Script (Code.gs) as ADMIN_PASSWORD constant
 // Here we just collect it and send it with admin requests for verification
 
@@ -31,6 +31,12 @@ createApp({
     const modalSubmitting = ref(false);
     const modalError = ref('');
 
+    const settings = ref({});
+    const showSettings = ref(false);
+    const settingsForm = ref({});
+    const settingsSaving = ref(false);
+    const whatIfCount = ref(null);
+
     const newSession = ref({ title: '', date: '', time: '', court: '', location: '', max_spots: 12 });
     const newMember = ref({ name: '' });
 
@@ -50,6 +56,7 @@ createApp({
         sessions.value = data.sessions || [];
         attendance.value = data.attendance || [];
         activity.value = data.activity || [];
+        settings.value = data.settings || {};
         adminPw.value = passwordInput.value;
         authed.value = true;
         lastSync.value = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -87,19 +94,38 @@ createApp({
         .reverse();
     });
 
+    const courtPrice = computed(() => Number(settings.value.court_price) || 24);
+
+    const upcomingRecurring = computed(() => {
+      const today = new Date().toISOString().split('T')[0];
+      return sessions.value
+        .filter(s => String(s.id).indexOf('rw-') === 0 && s.date >= today)
+        .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
+    });
+
+    const whatIfCourts = computed(() => {
+      const n = Number(whatIfCount.value);
+      if (!n || n <= 0) return null;
+      return Math.max(1, Math.ceil(n / 4));
+    });
+
     const optionA = computed(() => {
-      const courts = sessionsThisWeek.value.reduce((sum, s) => sum + getRecommendedCourts(getYesCount(s.id)), 0);
-      return { courts, cost: courts * 24 };
+      // Just enough: RSVP headcount ÷ 4
+      const yes = upcomingRecurring.value ? getYesCount(upcomingRecurring.value.id) : 0;
+      const courts = Math.max(1, Math.ceil(yes / 4));
+      return { courts, cost: courts * courtPrice.value };
     });
 
     const optionB = computed(() => {
-      const courts = sessionsThisWeek.value.length * 3;
-      return { courts, cost: courts * 24 };
+      // Recommended: RSVP + 1 buffer court for walk-ins
+      const courts = optionA.value.courts + 1;
+      return { courts, cost: courts * courtPrice.value };
     });
 
     const optionC = computed(() => {
-      const courts = sessionsThisWeek.value.length * 4;
-      return { courts, cost: courts * 24 };
+      // Full hall: every member could turn up
+      const courts = Math.max(1, Math.ceil(members.value.length / 4));
+      return { courts, cost: courts * courtPrice.value };
     });
 
     const avgAttendance = computed(() => {
@@ -261,12 +287,53 @@ createApp({
       }
     });
 
+    // ----- Weekly setup -----
+    function openSettings() {
+      settingsForm.value = {
+        recurring_day: settings.value.recurring_day || '1',
+        recurring_start: settings.value.recurring_start || '19:00',
+        recurring_end: settings.value.recurring_end || '21:00',
+        recurring_max: settings.value.recurring_max || '12',
+        court_price: settings.value.court_price || '24',
+      };
+      showSettings.value = true;
+    }
+
+    async function saveSettings() {
+      settingsSaving.value = true;
+      try {
+        const f = settingsForm.value;
+        const qs = new URLSearchParams({
+          action: 'save_settings', admin_pw: adminPw.value,
+          recurring_enabled: 'on',
+          recurring_day: f.recurring_day, recurring_start: f.recurring_start,
+          recurring_end: f.recurring_end, recurring_max: String(f.recurring_max),
+          court_price: String(f.court_price),
+        });
+        const res = await fetch(API_URL + '?' + qs.toString());
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+        showSettings.value = false;
+        await refresh();
+      } catch (e) {
+        modalError.value = e.message;
+      } finally {
+        settingsSaving.value = false;
+      }
+    }
+
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const recurringDayName = computed(() => dayNames[Number(settings.value.recurring_day) || 1] || 'Monday');
+
     return {
       authed, passwordInput, loginError, login,
       loading, error,
       members, sessions, attendance, activity, lastSync,
       sessionsThisWeek, thisWeekLabel, last12Sessions,
       optionA, optionB, optionC, avgAttendance,
+      settings, courtPrice, upcomingRecurring, whatIfCount, whatIfCourts,
+      showSettings, settingsForm, settingsSaving, openSettings, saveSettings,
+      recurringDayName,
       showAddSession, showAddMember, modalSubmitting, modalError,
       newSession, newMember, addSession, addMember,
       getRecommendedCourts, getBadgeClass, getYesCount, getMemberName,
