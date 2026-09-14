@@ -97,7 +97,7 @@ function ensureRecurringSessions() {
   const ids = {};
   for (let i = 1; i < data.length; i++) { if (data[i][0]) ids[String(data[i][0])] = true; }
   const skips = (s.skip_dates || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
-  const dates = upcomingDatesForDay(s.recurring_day, 2);
+  const dates = upcomingDatesForDay(s.recurring_day, 26); // half-year horizon: 26 sessions
   const now = new Date().toISOString();
   dates.forEach(function(dateStr) {
     const id = 'rw-' + dateStr;

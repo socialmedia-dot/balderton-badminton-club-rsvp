@@ -103,6 +103,21 @@ createApp({
         .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
     });
 
+    // Booking planner: next 12 recurring sessions (book courts ~1 month ahead)
+    const planningRows = computed(() => {
+      const today = new Date().toISOString().split('T')[0];
+      return sessions.value
+        .filter(s => String(s.id).indexOf('rw-') === 0 && s.date >= today)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, 12)
+        .map(s => {
+          const yes = getYesCount(s.id);
+          const maybe = attendance.value.filter(a => a.session_id === s.id && a.status === 'maybe').length;
+          const courts = Math.max(1, Math.ceil(yes / 4));
+          return { id: s.id, date: s.date, time: s.time, yes, maybe, courts, cost: courts * courtPrice.value };
+        });
+    });
+
     const whatIfCourts = computed(() => {
       const n = Number(whatIfCount.value);
       if (!n || n <= 0) return null;
@@ -331,7 +346,7 @@ createApp({
       members, sessions, attendance, activity, lastSync,
       sessionsThisWeek, thisWeekLabel, last12Sessions,
       optionA, optionB, optionC, avgAttendance,
-      settings, courtPrice, upcomingRecurring, whatIfCount, whatIfCourts,
+      settings, courtPrice, upcomingRecurring, whatIfCount, whatIfCourts, planningRows,
       showSettings, settingsForm, settingsSaving, openSettings, saveSettings,
       recurringDayName,
       showAddSession, showAddMember, modalSubmitting, modalError,

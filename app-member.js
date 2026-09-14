@@ -29,6 +29,38 @@ createApp({
         .sort((a, b) => a.date.localeCompare(b.date));
     });
 
+    const sessionByDate = computed(() => {
+      const m = {};
+      sessions.value.forEach(s => { m[s.date] = s; });
+      return m;
+    });
+
+    // Half-year mini calendars (6 months) with RSVP status colors
+    const calendarMonths = computed(() => {
+      const today = new Date();
+      const months = [];
+      for (let mi = 0; mi < 6; mi++) {
+        const first = new Date(today.getFullYear(), today.getMonth() + mi, 1);
+        const year = first.getFullYear();
+        const month = first.getMonth();
+        const monthName = first.toLocaleDateString('en-GB', { month: 'long' });
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        // leading blanks (Mon-first)
+        const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+        const cells = [];
+        for (let b = 0; b < firstDow; b++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+          const sess = sessionByDate.value[dateStr] || null;
+          cells.push({ day: d, date: dateStr, sessionId: sess ? sess.id : null,
+                       isToday: dateStr === today.toISOString().split('T')[0],
+                       status: sess ? getMyStatus(sess.id) : null });
+        }
+        months.push({ year, monthName, cells });
+      }
+      return months;
+    });
+
     const pastSessions = computed(() => {
       const today = new Date().toISOString().split('T')[0];
       return sessions.value
@@ -136,7 +168,7 @@ createApp({
     return {
       loading, error, members, sessions, attendance,
       currentMemberId, submitting, toast, lastSync,
-      upcomingSessions, pastSessions,
+      upcomingSessions, pastSessions, calendarMonths,
       getYesCount, getNoCount, getMaybeCount, getMyStatus,
       formatDay, formatNum, formatMonth, formatFullDate, isTomorrow,
       rsvp, onMemberChange,
