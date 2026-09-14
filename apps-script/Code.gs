@@ -99,10 +99,21 @@ function ensureRecurringSessions() {
   const skips = (s.skip_dates || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
   const dates = upcomingDatesForDay(s.recurring_day, 26); // half-year horizon: 26 sessions
   const now = new Date().toISOString();
-  dates.forEach(function(dateStr) {
+  // header order: id, date, time, court, location, max_spots, created_at
+  const timeCol = 2, locCol = 4, maxCol = 5;
+  dates.forEach(function(dateStr, idx) {
     const id = 'rw-' + dateStr;
-    if (ids[id]) return;               // already exists
     if (skips.indexOf(dateStr) !== -1) return; // KC deleted it on purpose
+    if (ids[id]) {
+      // keep existing rows in sync with saved schedule (time/location/max)
+      const rowIdx = data.findIndex(function(r) { return String(r[0]) === id; });
+      if (rowIdx > 0) {
+        if (String(data[rowIdx][timeCol]) !== String(s.recurring_start)) sheet.getRange(rowIdx + 1, timeCol + 1).setValue(s.recurring_start);
+        if (String(data[rowIdx][locCol]) !== String(s.recurring_location)) sheet.getRange(rowIdx + 1, locCol + 1).setValue(s.recurring_location);
+        if (String(data[rowIdx][maxCol]) !== String(Number(s.recurring_max) || 12)) sheet.getRange(rowIdx + 1, maxCol + 1).setValue(Number(s.recurring_max) || 12);
+      }
+      return;
+    }
     sheet.appendRow([id, dateStr, s.recurring_start, 'Court 1', s.recurring_location, Number(s.recurring_max) || 12, now]);
   });
 }
